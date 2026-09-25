@@ -2,6 +2,8 @@
 // Run with `npm run db:seed`. Safe to re-run: sample data is only added to an
 // empty database.
 
+import { randomBytes } from "node:crypto";
+
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
@@ -11,14 +13,21 @@ const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
 
 async function main() {
   const email = (process.env.SEED_OWNER_EMAIL || "owner@example.com").toLowerCase();
-  const password = process.env.SEED_OWNER_PASSWORD || "changeme123";
-
-  const owner = await db.user.upsert({
-    where: { email },
-    update: {},
-    create: { email, name: "Store Owner", role: "OWNER", passwordHash: await bcrypt.hash(password, 12) },
-  });
-  console.log(`Owner account: ${email}`);
+  const existing = await db.user.findUnique({ where: { email } });
+  let owner = existing;
+  if (!owner) {
+    // Never fall back to a well-known password: generate one if none is given.
+    const provided = process.env.SEED_OWNER_PASSWORD;
+    if (provided && provided.length < 10) throw new Error("SEED_OWNER_PASSWORD must be at least 10 characters");
+    const password = provided || randomBytes(12).toString("base64url");
+    owner = await db.user.create({
+      data: { email, name: "Store Owner", role: "OWNER", passwordHash: await bcrypt.hash(password, 12) },
+    });
+    console.log(`Created owner account: ${email}`);
+    if (!provided) console.log(`Generated password (shown once, change it after signing in): ${password}`);
+  } else {
+    console.log(`Owner account ${email} already exists.`);
+  }
 
   if ((await db.tank.count()) > 0) {
     console.log("Sample data already present, skipping.");

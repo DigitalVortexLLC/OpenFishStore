@@ -1,7 +1,5 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-
 import { variantGid } from "./ids";
 
 // Minimal Shopify Admin API client used to push livestock count changes made
@@ -38,9 +36,16 @@ type Adjusted = {
 /**
  * Adjust the "available" quantity of a variant at the configured location.
  * Uses changeFromQuantity for optimistic concurrency and retries once if the
- * quantity moved underneath us. Returns false when Shopify isn't configured.
+ * quantity moved underneath us. `idempotencyKey` must identify the back-office
+ * operation (e.g. its event id) so replaying it never applies the delta twice.
+ * Returns false when Shopify isn't configured.
  */
-export async function adjustShopifyInventory(variantId: string, delta: number, reason = "correction") {
+export async function adjustShopifyInventory(
+  variantId: string,
+  delta: number,
+  idempotencyKey: string,
+  reason = "correction",
+) {
   if (!isAdminConfigured() || delta === 0) return false;
   const locationId = process.env.SHOPIFY_LOCATION_ID!;
 
@@ -71,7 +76,8 @@ export async function adjustShopifyInventory(variantId: string, delta: number, r
         }
       }`,
       {
-        key: randomUUID(),
+        // Each concurrency retry sends a different changeFromQuantity, so it gets its own key.
+        key: `ofs:${idempotencyKey}:${attempt}`,
         input: {
           name: "available",
           reason,

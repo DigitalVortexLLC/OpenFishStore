@@ -101,7 +101,7 @@ model LivestockBatch {
 model LivestockEvent {
   id            String   @id @default(cuid())
   batchId       String
-  type          String // RECEIVED | SOLD | LOSS | MOVED | ADJUSTMENT | TREATMENT | STATUS
+  type          String // RECEIVED | SOLD | LOSS | MOVED | ADJUSTMENT | TREATMENT | STATUS | LINKED
   quantityDelta Int      @default(0)
   note          String?
   source        String   @default("STAFF") // STAFF | SHOPIFY

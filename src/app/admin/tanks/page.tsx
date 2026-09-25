@@ -12,7 +12,12 @@ export const dynamic = "force-dynamic";
 
 export default async function TanksPage() {
   const tanks = await getTanksWithLatestTest();
-  const systems = Map.groupBy(tanks, (t) => t.system ?? "Standalone tanks");
+  // Map.groupBy needs Node 21+; we support Node 20.9.
+  const systems = new Map<string, typeof tanks>();
+  for (const tank of tanks) {
+    const system = tank.system ?? "Standalone tanks";
+    systems.set(system, [...(systems.get(system) ?? []), tank]);
+  }
 
   return (
     <>

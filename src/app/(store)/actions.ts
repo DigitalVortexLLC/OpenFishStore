@@ -24,7 +24,8 @@ export async function addToCart(_prev: CartActionState, formData: FormData): Pro
     return { ok: true, message: "Added to cart" };
   } catch (err) {
     console.error(err);
-    return { ok: false, message: "Could not add to cart. Please try again." };
+    const message = err instanceof Error && /sold out|available/i.test(err.message) ? err.message : null;
+    return { ok: false, message: message ?? "Could not add to cart. Please try again." };
   }
 }
 
@@ -38,10 +39,15 @@ export async function updateCartLine(formData: FormData) {
   const cart = await getCart();
   if (!parsed.success || !cart) return;
   const { lineId, quantity } = parsed.data;
-  const updated =
-    quantity === 0
-      ? await commerce.removeCartLine(cart.id, lineId)
-      : await commerce.updateCartLine(cart.id, lineId, quantity);
-  await saveCartId(updated.id);
+  try {
+    const updated =
+      quantity === 0
+        ? await commerce.removeCartLine(cart.id, lineId)
+        : await commerce.updateCartLine(cart.id, lineId, quantity);
+    await saveCartId(updated.id);
+  } catch (err) {
+    // e.g. more than the available stock; keep the cart unchanged.
+    console.error(err);
+  }
   revalidatePath("/", "layout");
 }

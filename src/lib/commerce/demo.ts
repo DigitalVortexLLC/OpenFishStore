@@ -34,6 +34,17 @@ function findVariant(variantId: string) {
   return null;
 }
 
+/** Enforce the same availability rules as a real store: no sold-out or over-stock lines. */
+function checkAvailability(variantId: string, quantity: number) {
+  const found = findVariant(variantId);
+  if (!found) throw new Error("That product is no longer available.");
+  const { variant } = found;
+  if (!variant.availableForSale) throw new Error(`${found.product.title} is sold out.`);
+  if (variant.quantityAvailable != null && quantity > variant.quantityAvailable) {
+    throw new Error(`Only ${variant.quantityAvailable} of ${found.product.title} available.`);
+  }
+}
+
 function buildCart(lines: Lines): Cart {
   const cartLines = lines.flatMap(([variantId, quantity]) => {
     const found = findVariant(variantId);
@@ -125,13 +136,16 @@ export const demoProvider: CommerceProvider = {
     const lines = decodeCartId(cartId) ?? [];
     for (const { merchandiseId, quantity } of add) {
       const existing = lines.find((l) => l[0] === merchandiseId);
-      if (existing) existing[1] += quantity;
+      const total = (existing?.[1] ?? 0) + quantity;
+      checkAvailability(merchandiseId, total);
+      if (existing) existing[1] = total;
       else lines.push([merchandiseId, quantity]);
     }
     return buildCart(lines);
   },
 
   async updateCartLine(cartId, lineId, quantity) {
+    if (quantity > 0) checkAvailability(lineId, quantity);
     const lines = (decodeCartId(cartId) ?? [])
       .map(([id, q]): Lines[number] => [id, id === lineId ? quantity : q])
       .filter(([, q]) => q > 0);

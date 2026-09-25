@@ -15,7 +15,7 @@ FROM node:22-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
-ENV DATABASE_URL=file:/data/openfishstore.db
+ENV DATABASE_URL=file:/data/openfishstore.db?connection_limit=1
 COPY --from=build /app ./
 VOLUME /data
 EXPOSE 3000

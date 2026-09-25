@@ -19,6 +19,8 @@ import { db } from "@/lib/db";
 import {
   checkbox,
   formError,
+  nonNegativeInt,
+  nonNegativeNumber,
   optionalDate,
   optionalInt,
   optionalNumber,
@@ -116,8 +118,8 @@ const speciesSchema = z.object({
   careLevel: z.enum(CARE_LEVELS),
   temperament: z.enum(TEMPERAMENTS),
   reefSafe: z.preprocess((v) => (v === "yes" ? true : v === "no" ? false : undefined), z.boolean().optional()),
-  minTankGallons: optionalInt,
-  maxSizeInches: optionalNumber,
+  minTankGallons: nonNegativeInt,
+  maxSizeInches: nonNegativeNumber,
   diet: optionalString,
   notes: optionalString,
 });
@@ -140,9 +142,9 @@ const receiveSchema = z.object({
   speciesId: id,
   tankId: id,
   quantity: z.coerce.number().int().positive().max(10_000),
-  unitCost: optionalNumber,
+  unitCost: nonNegativeNumber,
   supplier: optionalString,
-  quarantineDays: optionalInt,
+  quarantineDays: nonNegativeInt,
   shopifyVariantId: optionalString,
   notes: optionalString,
 });
@@ -164,7 +166,7 @@ export async function receiveLivestock(_prev: ActionState, formData: FormData): 
     },
   });
   // New arrivals start in quarantine, so linking pushes nothing to Shopify yet.
-  if (shopifyVariantId) await linkBatchToVariant({ batchId: batch.id, variantId: shopifyVariantId });
+  if (shopifyVariantId) await linkBatchToVariant({ batchId: batch.id, variantId: shopifyVariantId, userId: user.id });
   return done(`Received ${quantity}. Batch is in quarantine.`, "/admin/livestock", `/admin/tanks/${rest.tankId}`);
 }
 
@@ -211,10 +213,14 @@ export async function moveLivestock(_prev: ActionState, formData: FormData): Pro
 }
 
 export async function linkVariant(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  await requireUser("MANAGER");
+  const user = await requireUser("MANAGER");
   const parsed = parseForm(z.object({ batchId: id, variantId: optionalString }), formData);
   if (!parsed.success) return formError(parsed.error);
-  const result = await linkBatchToVariant({ batchId: parsed.data.batchId, variantId: parsed.data.variantId ?? null });
+  const result = await linkBatchToVariant({
+    batchId: parsed.data.batchId,
+    variantId: parsed.data.variantId ?? null,
+    userId: user.id,
+  });
   return synced(result, "Shopify link saved.", `/admin/livestock/${parsed.data.batchId}`);
 }
 
@@ -271,7 +277,7 @@ const specialOrderSchema = z.object({
   customerPhone: optionalString,
   request: z.string().trim().min(1).max(500),
   quantity: z.coerce.number().int().positive().default(1),
-  deposit: optionalNumber,
+  deposit: nonNegativeNumber,
   notes: optionalString,
 });
 

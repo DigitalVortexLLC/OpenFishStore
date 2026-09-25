@@ -11,6 +11,8 @@ export const optionalString = z.preprocess(
 export const optionalNumber = z.preprocess(blankToUndefined, z.coerce.number().finite().optional());
 export const optionalInt = z.preprocess(blankToUndefined, z.coerce.number().int().optional());
 export const optionalDate = z.preprocess(blankToUndefined, z.coerce.date().optional());
+export const nonNegativeNumber = optionalNumber.pipe(z.number().min(0).optional());
+export const nonNegativeInt = optionalInt.pipe(z.number().int().min(0).optional());
 export const checkbox = z.preprocess((v) => v === "on" || v === "true", z.boolean());
 
 export type ActionState = { ok: boolean; message: string } | null;

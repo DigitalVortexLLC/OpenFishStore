@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 
-import { db } from "@/lib/db";
 import { applyShopifyOrder } from "@/lib/livestock";
 import { verifyShopifyHmac, type OrderPayload } from "@/lib/shopify/webhooks";
 
@@ -15,28 +14,20 @@ export async function POST(request: Request) {
   }
 
   const topic = request.headers.get("x-shopify-topic") ?? "unknown";
+  if (topic !== "orders/create") return Response.json({ ok: true, ignored: topic });
+
   const webhookId = request.headers.get("x-shopify-webhook-id") ?? request.headers.get("x-shopify-event-id");
   if (!webhookId) return new Response("Missing webhook id", { status: 400 });
 
-  // Shopify retries deliveries; claim the id first so each is applied once.
   try {
-    await db.shopifyWebhook.create({ data: { id: webhookId, topic } });
+    // The delivery is recorded in the same transaction that applies the order,
+    // so a crash or error mid-way leaves nothing behind for Shopify's retry.
+    const applied = await applyShopifyOrder(JSON.parse(rawBody) as OrderPayload, { webhookId, topic });
+    return applied === null ? Response.json({ ok: true, duplicate: true }) : Response.json({ ok: true, applied });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return Response.json({ ok: true, duplicate: true });
     }
-    throw err;
-  }
-
-  try {
-    if (topic === "orders/create") {
-      const applied = await applyShopifyOrder(JSON.parse(rawBody) as OrderPayload);
-      return Response.json({ ok: true, applied });
-    }
-    return Response.json({ ok: true, ignored: topic });
-  } catch (err) {
-    // Release the claim so Shopify's retry can try again.
-    await db.shopifyWebhook.delete({ where: { id: webhookId } }).catch(() => {});
     console.error(`Failed to process Shopify webhook ${topic}`, err);
     return new Response("Processing failed", { status: 500 });
   }

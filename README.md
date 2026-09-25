@@ -55,13 +55,13 @@ git clone https://github.com/DigitalVortexLLC/OpenFishStore.git
 cd OpenFishStore
 npm install
 cp .env.example .env        # then set SESSION_SECRET (openssl rand -base64 32)
-npm run setup               # creates the database and seeds sample data
+npm run setup               # creates the database, seeds sample data and prints the owner password
 npm run dev
 ```
 
 - Storefront: http://localhost:3000
-- Back office: http://localhost:3000/admin, signing in with `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD`
-  (default `owner@example.com` / `changeme123`; change it)
+- Back office: http://localhost:3000/admin. Sign in as `SEED_OWNER_EMAIL` (default `owner@example.com`)
+  with `SEED_OWNER_PASSWORD`, or with the random password the seed prints if you left it blank.
 
 To connect your Shopify store, see **[docs/shopify-setup.md](docs/shopify-setup.md)**.
 
@@ -108,8 +108,12 @@ docker build -t openfishstore .
 docker run -p 3000:3000 -v ofs-data:/data \
   -e SESSION_SECRET=... -e SHOPIFY_STORE_DOMAIN=... -e SHOPIFY_STOREFRONT_ACCESS_TOKEN=... \
   openfishstore
-docker exec -it <container> npx prisma db seed   # first run: create the owner
+docker exec -it <container> npx prisma db seed   # first run: create the owner (prints its password)
 ```
+
+Staff sessions use `Secure` cookies when the request arrives over HTTPS. If you
+serve the app over plain HTTP (for example on a store LAN), set
+`COOKIE_SECURE=false`.
 
 **PostgreSQL:** change `provider = "sqlite"` to `provider = "postgresql"` in
 `prisma/schema.prisma`, point `DATABASE_URL` at your database and run

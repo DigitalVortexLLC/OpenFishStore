@@ -23,6 +23,22 @@ describe("demo cart", () => {
     expect(cart.lines).toHaveLength(0);
   });
 
+  it("enforces availability and stock limits", async () => {
+    const soldOut = await demoProvider.getProduct("german-blue-ram");
+    const cart = await demoProvider.createCart();
+    await expect(
+      demoProvider.addToCart(cart.id, [{ merchandiseId: soldOut!.variants[0].id, quantity: 1 }]),
+    ).rejects.toThrow(/sold out/);
+
+    const tang = await demoProvider.getProduct("yellow-tang");
+    const variant = tang!.variants[0];
+    const withTang = await demoProvider.addToCart(cart.id, [{ merchandiseId: variant.id, quantity: 12 }]);
+    await expect(
+      demoProvider.addToCart(withTang.id, [{ merchandiseId: variant.id, quantity: 1 }]),
+    ).rejects.toThrow(/Only 12/);
+    await expect(demoProvider.updateCartLine(withTang.id, variant.id, 13)).rejects.toThrow(/Only 12/);
+  });
+
   it("rejects malformed cart ids", () => {
     expect(decodeCartId("gid://shopify/Cart/abc")).toBeNull();
     expect(decodeCartId("demo:not-json")).toBeNull();
