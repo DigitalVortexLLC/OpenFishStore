@@ -1,0 +1,185 @@
+// OpenFishStore internal data model.
+//
+// Shopify is the system of record for the catalog, customers, orders and
+// payments. This database holds the things Shopify doesn't model well for a
+// live-animal retailer: tanks/systems, livestock batches and their history,
+// water chemistry, husbandry tasks and special orders.
+//
+// String "enum" columns are validated in application code (see
+// src/lib/constants.ts) so the schema works on both SQLite and PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("STAFF") // OWNER | MANAGER | STAFF
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  waterTests      WaterTest[]
+  livestockEvents LivestockEvent[]
+  tasksAssigned   MaintenanceTask[] @relation("TaskAssignee")
+  tasksCompleted  MaintenanceTask[] @relation("TaskCompletedBy")
+}
+
+model Tank {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  system        String? // shared filtration system, e.g. "Reef Rack A"
+  waterType     String // FRESHWATER | SALTWATER | REEF | BRACKISH
+  purpose       String   @default("DISPLAY") // DISPLAY | SALES | QUARANTINE | HOLDING
+  volumeGallons Float
+  location      String?
+  notes         String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  batches    LivestockBatch[]
+  waterTests WaterTest[]
+  tasks      MaintenanceTask[]
+}
+
+model Species {
+  id             String   @id @default(cuid())
+  commonName     String
+  scientificName String?
+  category       String // FISH | INVERTEBRATE | CORAL | PLANT
+  waterType      String // FRESHWATER | SALTWATER | REEF | BRACKISH
+  careLevel      String   @default("EASY") // EASY | MODERATE | EXPERT
+  temperament    String   @default("PEACEFUL") // PEACEFUL | SEMI_AGGRESSIVE | AGGRESSIVE
+  reefSafe       Boolean?
+  minTankGallons Int?
+  maxSizeInches  Float?
+  diet           String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  batches LivestockBatch[]
+
+  @@unique([commonName, scientificName])
+}
+
+// A group of animals of one species received together and kept in one tank.
+model LivestockBatch {
+  id               String    @id @default(cuid())
+  speciesId        String
+  tankId           String
+  quantity         Int
+  receivedQuantity Int
+  unitCostCents    Int?
+  supplier         String?
+  receivedAt       DateTime  @default(now())
+  status           String    @default("QUARANTINE") // QUARANTINE | AVAILABLE | HOLD | SOLD_OUT
+  quarantineUntil  DateTime?
+  // Links the batch to a sellable Shopify variant so online sales decrement it.
+  shopifyVariantId String?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  species Species          @relation(fields: [speciesId], references: [id])
+  tank    Tank             @relation(fields: [tankId], references: [id])
+  events  LivestockEvent[]
+
+  @@index([shopifyVariantId])
+  @@index([tankId])
+}
+
+model LivestockEvent {
+  id            String   @id @default(cuid())
+  batchId       String
+  type          String // RECEIVED | SOLD | LOSS | MOVED | ADJUSTMENT | TREATMENT | STATUS | LINKED
+  quantityDelta Int      @default(0)
+  note          String?
+  source        String   @default("STAFF") // STAFF | SHOPIFY
+  externalRef   String? // e.g. Shopify order id
+  userId        String?
+  createdAt     DateTime @default(now())
+
+  batch LivestockBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  user  User?          @relation(fields: [userId], references: [id])
+
+  @@index([batchId, createdAt])
+}
+
+model WaterTest {
+  id           String   @id @default(cuid())
+  tankId       String
+  testedAt     DateTime @default(now())
+  temperatureF Float?
+  ph           Float?
+  ammonia      Float? // ppm
+  nitrite      Float? // ppm
+  nitrate      Float? // ppm
+  salinity     Float? // specific gravity
+  alkalinity   Float? // dKH
+  calcium      Float? // ppm
+  magnesium    Float? // ppm
+  phosphate    Float? // ppm
+  notes        String?
+  userId       String?
+  createdAt    DateTime @default(now())
+
+  tank Tank  @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([tankId, testedAt])
+}
+
+model MaintenanceTask {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  tankId        String?
+  assigneeId    String?
+  dueAt         DateTime
+  // When set, completing the task schedules the next occurrence.
+  repeatDays    Int?
+  completedAt   DateTime?
+  completedById String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tank        Tank? @relation(fields: [tankId], references: [id], onDelete: SetNull)
+  assignee    User? @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  completedBy User? @relation("TaskCompletedBy", fields: [completedById], references: [id])
+
+  @@index([completedAt, dueAt])
+}
+
+model SpecialOrder {
+  id             String   @id @default(cuid())
+  customerName   String
+  customerEmail  String?
+  customerPhone  String?
+  request        String
+  quantity       Int      @default(1)
+  depositCents   Int      @default(0)
+  status         String   @default("REQUESTED") // REQUESTED | ORDERED | ARRIVED | NOTIFIED | COMPLETED | CANCELLED
+  shopifyOrderId String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+}
+
+// Idempotency log for Shopify webhooks (Shopify retries deliveries).
+model ShopifyWebhook {
+  id         String   @id // X-Shopify-Webhook-Id
+  topic      String
+  receivedAt DateTime @default(now())
+}
