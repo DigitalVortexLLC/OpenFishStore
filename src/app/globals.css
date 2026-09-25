@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --color-ocean-50: #eefbfb;
+  --color-ocean-100: #d4f3f4;
+  --color-ocean-200: #aee6ea;
+  --color-ocean-500: #1b9aa8;
+  --color-ocean-600: #147c8b;
+  --color-ocean-700: #146472;
+  --color-ocean-800: #16525d;
+  --color-ocean-900: #0f3a43;
+  --color-ocean-950: #07232a;
+  --color-coral-500: #f2704f;
+  --color-coral-600: #de5433;
+  --color-sand-50: #fbf8f2;
+}
+
+body {
+  @apply bg-white text-slate-900 antialiased;
+}
+
+@layer components {
+  /* Product descriptions come from Shopify as HTML. */
+  .rich-text p { @apply mb-3 leading-relaxed; }
+  .rich-text ul { @apply mb-3 list-disc pl-5; }
+  .rich-text ol { @apply mb-3 list-decimal pl-5; }
+  .rich-text a { @apply text-ocean-700 underline; }
+  .rich-text h2, .rich-text h3 { @apply mt-5 mb-2 font-semibold; }
+
+  /* Shared back-office form controls. */
+  .input {
+    @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-ocean-500 focus:ring-2 focus:ring-ocean-200;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-ocean-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-ocean-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50;
+  }
+  .field-label {
+    @apply mb-1 block text-xs font-medium tracking-wide text-slate-600 uppercase;
+  }
+}
